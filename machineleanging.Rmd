@@ -1,0 +1,121 @@
+---
+title: "Machine Learning Project"
+author: "Alpha Sue"
+date: "2016Äê8ÔÂ24ÈÕ"
+output: html_document
+---
+
+#Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement ¨C a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+
+In this file we will try to get the data, clean the data, then preprocess the data and make different model by different methods. We will also compare their different accuracy and then chose the best one to use for test.
+
+
+##1.download data
+```{r}
+
+set.seed(911)
+trainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+download.file(url=trainUrl,destfile="train.csv")
+download.file(url=testUrl,destfile="test.csv")
+```
+##2.read data and create training and testing data
+```{r}
+library(caret)
+train<-read.csv("train.csv",na.string=c("NA",""))
+test<-read.csv("test.csv",na.string=c("NA",""))
+inTrain<-createDataPartition(train$classe,p=0.7,list=F)
+training<-train[inTrain,]
+testing<-train[-inTrain,]
+dim(training);dim(testing)
+```
+##3.data procesing
+
+###Removing Zero Covariates
+```{r}
+nzv<-nearZeroVar(training,saveMetrics=T)
+training<-training[,nzv$nzv==FALSE]
+nzv<-nearZeroVar(testing,saveMetrics=T)
+testing<-testing[,nzv$nzv==FALSE]
+```
+
+###we will remove the first column because it's index and remove all the columns with more than 70% null values
+```{r}
+training<-training[,-1]
+
+temp<-training
+ j<-1
+for(i in 1:length(training)) {
+    if( sum( is.na( training[, i] ) ) /nrow(training) >= .7) {
+       
+        if (j==1){
+      t<-i
+}  else{t<-c(t,i)}
+    j<-j+1
+      
+    }
+}
+
+temp<-temp[,-t]
+
+
+training<-temp
+```
+###then we need to transfer the form of training data to the form of testing data
+
+```{r}
+testing<-testing[colnames(training)]
+test<-test[colnames(training[,-58])]
+
+for (i in 1:length(test) ) {
+    for(j in 1:length(training)) {
+        if( length( grep(names(training[i]), names(test)[j]) ) == 1)  {
+            class(test[j]) <- class(training[i])
+        }      
+    }      
+}
+
+test<- rbind(training[2, -58] , test)
+test<- test[-1,]
+```
+ 
+##4.Prediction with Decision Trees
+```{r}
+set.seed(911)
+library(rpart)
+library(rattle)
+library(caret)
+fit1<-rpart(classe~.,data=training,method="class")
+fancyRpartPlot(fit1)
+prediction1<-predict(fit1,testing,type="class")
+confusionMatrix(prediction1,testing$classe)
+```
+
+##5.Prediction with Random Forests
+```{r}
+library(caret)
+set.seed(911)
+fit2<-randomForest(classe~.,data=training)
+prediction2<-predict(fit2,testing)
+confusionMatrix(prediction2,testing$classe)
+```
+if(FALSE){
+##6.Prediction with boosting with trees
+```{r}
+fit3<-train(classe~.,data=training,method="gbm",verbose=FALSE)
+prediction3<-predict(fit3,testing)
+confusionMatrix(prediction3,testing$classe)
+```
+}
+##7. results
+Comparing these three methods, we can see that random forest is the best method with the highest accuracy almost 0.998.
+Therefore, we will use this method to predict with the test data.
+##8. predict the test
+```{r}
+pred<-predict(fit2,test)
+pred
+```
